@@ -7,11 +7,11 @@
     <label class='field wide'>
       <span>Venue</span>
       <input v-model='place' type='text' ref='input'
-        placeholder='Ritz-Carlton Sarasota  —  or  27.3364, -82.5307' :disabled='busy'>
+        placeholder='Type a venue, e.g. Ritz-Carlton Sarasota (or paste lat, lon)' :disabled='busy'>
     </label>
     <label class='field'>
       <span>Event (optional)</span>
-      <input v-model='event' type='text' placeholder='Leadership Summit 2026' :disabled='busy'>
+      <input v-model='event' type='text' placeholder='e.g. Leadership Summit 2026' :disabled='busy'>
     </label>
     <div class='field'>
       <span>Radius</span>
@@ -130,6 +130,10 @@ export default {
       font-family: inherit;
       &:focus {
         border-color: highlight-color;
+      }
+      &::placeholder {
+        color: #b5b5b5;
+        font-style: italic;
       }
     }
   }

@@ -6,6 +6,7 @@ import {isWebGLEnabled} from 'w-gl';
 import App from './App.vue';
 import NoWebGL from './NoWebGL.vue';
 import Query from './lib/Query.js';
+import driveRings, {PRESETS as driveRingPresets} from './lib/scripts/driveRings.js';
 
 // const wgl = require('w-gl');
 
@@ -14,6 +15,8 @@ window.addEventListener('error', logError);
 // expose the console API
 window.requireModule = d3Require;
 window.Query = Query;
+window.driveRings = driveRings;
+driveRings.presets = driveRingPresets;
 
 if (isWebGLEnabled(document.querySelector('#canvas'))) {
   createApp(App).mount('#host');

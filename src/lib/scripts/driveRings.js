@@ -16,12 +16,13 @@
 import tinycolor from 'tinycolor2';
 
 export const PRESETS = {
-  // Ordered from the center outward.
-  ember:  ['#fff3b0', '#ffcf56', '#ff9f1c', '#f4743b', '#d1495b', '#7a1f3d'],
-  ocean:  ['#e0fbfc', '#98dfea', '#4fb3d9', '#2a7fb8', '#1d4e89', '#0b1f4d'],
-  sunset: ['#ffd6a5', '#ffadad', '#f28482', '#c06c84', '#6c5b7b', '#355c7d'],
-  mono:   ['#ffffff', '#d9d9d9', '#a6a6a6', '#737373', '#404040', '#1a1a1a'],
-  gold:   ['#f7e7b4', '#e8c872', '#c9a227', '#9c7a1e', '#6b5415', '#3d300c'],
+  // Ordered from the center outward. Outer colors stay mid-tone and saturated
+  // so every band still reads on a black poster or a white shirt.
+  ember:  ['#fff3b0', '#ffcf56', '#ff9f1c', '#f4743b', '#e0475b', '#b83b8e'],
+  ocean:  ['#e0fbfc', '#98dfea', '#4fb3d9', '#2f8fd0', '#3d6fd6', '#5b5bd6'],
+  sunset: ['#ffd6a5', '#ffadad', '#f28482', '#d96c9a', '#a66cc1', '#6c7bd1'],
+  mono:   ['#ffffff', '#d0d0d0', '#a8a8a8', '#828282', '#5e5e5e', '#3c3c3c'],
+  gold:   ['#fff4d6', '#f6dc8f', '#e8b84a', '#d08c2a', '#b5652a', '#9a4a2e'],
 };
 
 export default function driveRings(options = {}) {
@@ -211,7 +212,7 @@ export function interpolatePalette(palette, count) {
   return result;
 }
 
-function resolvePalette({palette, preset}) {
+export function resolvePalette({palette, preset}) {
   if (Array.isArray(palette) && palette.length >= 2) return palette;
   const name = preset || 'ember';
   if (!PRESETS[name]) {
@@ -220,17 +221,17 @@ function resolvePalette({palette, preset}) {
   return PRESETS[name];
 }
 
-function clampBands(n) {
+export function clampBands(n) {
   return Math.max(2, Math.min(12, Math.round(n)));
 }
 
-function toUint32(color) {
+export function toUint32(color) {
   const {r, g, b, a} = tinycolor(color).toRgb();
   // w-gl expects 0xRRGGBBAA
   return ((r << 24) | (g << 16) | (b << 8) | Math.round(a * 255)) >>> 0;
 }
 
-function haversine(a, b) {
+export function haversine(a, b) {
   const R = 6371000;
   const toRad = Math.PI / 180;
   const dLat = (b.lat - a.lat) * toRad;

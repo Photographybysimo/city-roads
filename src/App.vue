@@ -1,5 +1,10 @@
 <template>
-  <find-place v-if='!placeFound' @loaded='onGridLoaded'></find-place>
+  <venue-find v-if='mode === "venue" && !venueController'
+    :busy='venueBusy' :status='venueStatus' :is-error='venueError'
+    @submit='startVenue' @cancel='cancelVenue' @city-mode='mode = "city"'></venue-find>
+  <venue-panel v-if='venueController' :controller='venueController' :key='venueKey'
+    @start-over='startOver' @background='syncPageBackground'></venue-panel>
+  <find-place v-if='mode === "city" && !placeFound' @loaded='onGridLoaded'></find-place>
   <div id="app">
     <div v-if='placeFound'>
       <div class='controls'>
@@ -75,7 +80,12 @@
 </template>
 
 <script>
+import {markRaw} from 'vue';
 import FindPlace from './components/FindPlace.vue';
+import VenueFind from './components/VenueFind.vue';
+import VenuePanel from './components/VenuePanel.vue';
+import venueMap from './lib/scripts/venueMap.js';
+import Progress from './lib/Progress.js';
 import LoadingIcon from './components/LoadingIcon.vue';
 import EditableLabel from './components/EditableLabel.vue';
 import ColorPicker from './components/ColorPicker.vue';
@@ -102,12 +112,21 @@ export default {
   name: 'App',
   components: {
     FindPlace,
+    VenueFind,
+    VenuePanel,
     LoadingIcon,
     EditableLabel,
     ColorPicker
   },
   data() {
     return {
+      // Shared city links (?areaId=…) open in city mode, everything else in venue mode.
+      mode: (appState.get('areaId') || appState.get('osm_id')) ? 'city' : 'venue',
+      venueController: null,
+      venueBusy: false,
+      venueStatus: '',
+      venueError: false,
+      venueKey: 0,
       placeFound: false,
       name: '',
       zazzleLink: null,
@@ -129,6 +148,8 @@ export default {
     bus.on('background-color', this.syncBackground);
     bus.on('line-color', this.syncLineColor);
     this.overlayManager = createOverlayManager();
+    // Console users get the same flow as the form, panel included.
+    window.venueMap = options => this.startVenue(options);
   },
   beforeUnmount() {
     debugger;
@@ -139,9 +160,58 @@ export default {
     bus.off('line-color', this.syncLineColor);
   },
   methods: {
+    ensureScene() {
+      if (this.scene) return this.scene;
+      let canvas = getCanvas();
+      canvas.style.visibility = 'visible';
+      this.scene = createScene(canvas);
+      this.scene.on('layer-added', this.updateLayers);
+      this.scene.on('layer-removed', this.updateLayers);
+      window.scene = this.scene;
+      return this.scene;
+    },
+
+    async startVenue(options) {
+      if (this.venueBusy) return;
+      this.mode = 'venue';
+      this.venueBusy = true;
+      this.venueError = false;
+      this.venueStatus = 'Starting…';
+      this.venueProgress = new Progress();
+      try {
+        const controller = await venueMap({
+          preset: 'gold',
+          ...options,
+          scene: this.ensureScene(),
+          progress: this.venueProgress,
+          onStatus: message => { this.venueStatus = message; },
+        });
+        this.venueKey += 1;
+        this.venueController = markRaw(controller);
+        window.venue = controller;
+        return controller;
+      } catch (e) {
+        this.venueError = true;
+        this.venueStatus = e && e.cancelled ? 'Cancelled.' : friendlyVenueError(e);
+        this.dispose();
+        getCanvas().style.visibility = 'hidden';
+      } finally {
+        this.venueBusy = false;
+      }
+    },
+
+    cancelVenue() {
+      if (this.venueProgress) this.venueProgress.cancel();
+    },
+
+    syncPageBackground(color) {
+      document.body.style.backgroundColor = color;
+    },
+
     dispose() {
       if (this.scene) {
         this.scene.dispose();
+        this.scene = null;
         window.scene = null;
       }
     },
@@ -185,6 +255,10 @@ export default {
       appState.enableCache();
 
       this.dispose();
+      this.venueController = null;
+      this.venueStatus = '';
+      this.venueError = false;
+      window.venue = null;
       this.placeFound = false;
       this.zazzleLink = null;
       this.showSettings = false;
@@ -278,6 +352,13 @@ export default {
       });
     }
   }
+}
+
+function friendlyVenueError(e) {
+  if (e && e.allServersFailed) {
+    return 'The map servers are busy right now. Wait a couple of minutes, then try again or pick a smaller radius.';
+  }
+  return (e && e.message) || 'Something went wrong. Please try again.';
 }
 
 function toRGBA(c) {

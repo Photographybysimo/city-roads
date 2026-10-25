@@ -6,7 +6,13 @@ export is a print-ready poster or tee file with typography.
 
 ## Quick start
 
-Open the app, wait for it to load (no city needed), open the console:
+Open the app. The home screen is the venue form: type a venue name (or paste
+`lat, lon` from Google Maps), pick a radius, hit **Create venue map**. The panel
+on the left handles text, colors, poster and t-shirt exports.
+
+## Console
+
+The same flow is available from the console, and opens the same panel:
 
 ```js
 let v = await venueMap({

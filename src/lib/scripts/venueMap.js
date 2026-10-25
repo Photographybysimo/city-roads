@@ -35,16 +35,20 @@ const UNITS_PER_INCH = 100; // SVG user units
 export default async function venueMap(options = {}) {
   const scene = options.scene || window.scene;
   if (!scene) throw new Error('Scene is not ready yet. Wait for the page to finish loading.');
+  const status = options.onStatus || (message => console.log('venueMap: ' + message));
 
   // 1. Where is the venue?
   let {lat, lon} = options;
   let placeName = options.place;
+  let displayName = placeName || '';
   if (lat === undefined || lon === undefined) {
     if (!placeName) throw new Error('Pass either { place } or { lat, lon }.');
+    status(`Finding "${placeName}"…`);
     const found = await geocode(placeName);
     lat = found.lat; lon = found.lon;
     placeName = found.name;
-    console.log(`venueMap: found "${found.displayName}" at ${lat}, ${lon}`);
+    displayName = found.displayName;
+    status(`Found ${found.displayName}`);
   }
   const venue = {lat: +lat, lon: +lon};
 
@@ -60,7 +64,7 @@ export default async function venueMap(options = {}) {
   };
 
   // 2. Load only the roads inside the radius, not the whole city.
-  console.log(`venueMap: loading roads within ${radiusMeters / 1000} km…`);
+  status(`Loading roads within ${radiusMeters / 1000} km…`);
   const t0 = performance.now();
   const loadOptions = new LoadOptions({
     wayFilter: options.wayFilter || Query.RoadStrict,
@@ -71,8 +75,9 @@ export default async function venueMap(options = {}) {
     timeout: 120,
     maxHeapByteSize: 256 * 1024 * 1024,
   });
-  const grid = await Query.runFromOptions(loadOptions);
-  console.log(`venueMap: roads loaded in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+  const grid = await Query.runFromOptions(loadOptions, options.progress);
+  status(`Roads loaded in ${((performance.now() - t0) / 1000).toFixed(1)}s. Measuring distances…`);
+  await new Promise(resolve => setTimeout(resolve, 0)); // let the status paint
 
   // 3. Network distance from the venue.
   const {adjacency, segments} = buildGraph(grid);
@@ -110,15 +115,19 @@ export default async function venueMap(options = {}) {
     segments: inCircle.length,
     bandWidthKm: +(maxDistance / bands / 1000).toFixed(2),
   };
-  console.log('venueMap ready', summary);
+  status('Ready');
 
   return {
     summary,
+    venue,
+    displayName,
+    get text() { return {...text}; },
+    get state() { return {bands, background, lineWidth, palette: palette.slice()}; },
     presets: Object.keys(PRESETS),
     setPreset(name) { palette = resolvePalette({preset: name}); drawScene(); },
     setPalette(colors) { palette = resolvePalette({palette: colors}); drawScene(); },
     setBands(count) { bands = clampBands(count); drawScene(); },
-    setBackground(color) { background = color; scene.background = color; },
+    setBackground(color) { background = color; scene.background = color; drawScene(); },
     setLineWidth(width) {
       lineWidth = width;
       if (lines) lines.setLineWidth(width);

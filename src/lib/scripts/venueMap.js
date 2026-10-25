@@ -65,6 +65,11 @@ export default async function venueMap(options = {}) {
   const loadOptions = new LoadOptions({
     wayFilter: options.wayFilter || Query.RoadStrict,
     bbox: bboxAround(venue, radiusMeters * 1.05),
+    // A small area needs seconds. A short server-side limit also means an
+    // abandoned query frees its slot quickly instead of blocking the next
+    // try with "too many requests" for up to 15 minutes.
+    timeout: 120,
+    maxHeapByteSize: 256 * 1024 * 1024,
   });
   const grid = await Query.runFromOptions(loadOptions);
   console.log(`venueMap: roads loaded in ${((performance.now() - t0) / 1000).toFixed(1)}s`);

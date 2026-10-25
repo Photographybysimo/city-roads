@@ -1,17 +1,19 @@
 import Progress from './Progress.js';
 import {getCached, setCached} from './osmCache.js';
 
-// Ordered by reliability. The first two are asked at the same time.
+// Public instances listed on https://wiki.openstreetmap.org/wiki/Overpass_API
+// (checked Oct 2026). The first two are asked at the same time.
+// Dropped: overpass.kumi.systems, overpass.osm.jp, overpass.openstreetmap.ru
+// (no longer listed; they hang, time out or fail TLS).
 let backends = [
+  'https://overpass.private.coffee/api/interpreter',
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-  'https://overpass.osm.jp/api/interpreter',
-  'https://overpass.openstreetmap.ru/cgi/interpreter'
 ];
 
 const START_PARALLEL = 2;     // servers asked immediately
-const HEDGE_AFTER_MS = 20000; // ask one more server if nobody has answered by then
+const HEDGE_AFTER_MS = 15000; // ask one more server if nobody has answered by then
+const GIVE_UP_AFTER_MS = 120000; // never spin forever: fail with a clear message
 
 /**
  * Runs an Overpass query.
@@ -53,6 +55,14 @@ function race(data, progress) {
 
     for (let i = 0; i < START_PARALLEL; ++i) launchNext();
     scheduleHedge();
+    const giveUpTimer = setTimeout(() => {
+      if (settled) return;
+      controllers.forEach(c => c.abort());
+      const err = new Error('No map server answered within 2 minutes.');
+      err.allServersFailed = true;
+      err.serversAttempted = nextIndex;
+      rejectOnce(err);
+    }, GIVE_UP_AFTER_MS);
 
     function launchNext() {
       if (settled || nextIndex >= backends.length) return false;
@@ -75,6 +85,7 @@ function race(data, progress) {
         settled = true;
         winner = controller;
         clearTimeout(hedgeTimer);
+        clearTimeout(giveUpTimer);
         controllers.forEach(c => { if (c !== controller) c.abort(); });
         return readJSON(res, progress).then(json => {
           progress.offCancel(cancelAll);
@@ -122,6 +133,7 @@ function race(data, progress) {
       if (settled && !err.cancelled) return;
       settled = true;
       clearTimeout(hedgeTimer);
+      clearTimeout(giveUpTimer);
       progress.offCancel(cancelAll);
       reject(err);
     }

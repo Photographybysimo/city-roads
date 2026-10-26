@@ -11,6 +11,8 @@ export default defineConfig({
   //  template: 'network'
   })],
   base: '',
+  // mediabunny (video export) uses BigInt literals, which need ES2020.
+  build: {target: 'es2020'},
   server: {
     port: 8080
   },

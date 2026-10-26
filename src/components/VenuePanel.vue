@@ -73,7 +73,46 @@
     <p class='note'>The print file has a transparent background. Colors are tuned to show on the shirt color you pick.</p>
   </section>
 
+  <section>
+    <h4>Motion · venue pulse</h4>
+    <div class='row-inline'>
+      <span>Format</span>
+      <div class='chips'>
+        <button v-for='(a, key) in aspects' :key='key' :class='{active: aspect === key}'
+          @click='aspect = key' :title='a.label'>{{a.label.split(" · ")[0]}}</button>
+      </div>
+    </div>
+    <div class='row-inline'>
+      <span>Length</span>
+      <div class='chips'>
+        <button v-for='sec in [10, 15, 30]' :key='sec' :class='{active: seconds === sec}'
+          @click='seconds = sec'>{{sec}}s</button>
+      </div>
+    </div>
+    <label class='row-inline check'>
+      <span>Title card</span>
+      <input type='checkbox' v-model='titleCard'>
+    </label>
+    <div class='actions'>
+      <button @click='openPreview' :disabled='exporting'>Play preview</button>
+      <button class='primary' @click='exportMP4' :disabled='exporting'>
+        {{exporting ? `Rendering ${Math.round(exportProgress * 100)}%` : 'Export MP4'}}
+      </button>
+    </div>
+    <p class='note'>{{aspects[aspect].label}}. Renders frame by frame at 30 fps, faster than real time on most Macs.</p>
+  </section>
+
   <p v-if='message' class='note status'>{{message}}</p>
+
+  <div v-if='previewOpen' class='video-preview' @click.self='closePreview'>
+    <div class='frame'>
+      <canvas ref='previewCanvas'></canvas>
+      <div class='preview-actions'>
+        <button @click='closePreview'>Close</button>
+        <button class='primary' @click='closePreview(); exportMP4()'>Export this MP4</button>
+      </div>
+    </div>
+  </div>
   <p class='note'>{{controller.summary.segments.toLocaleString()}} road segments · each band ≈ {{controller.summary.bandWidthKm}} km of driving</p>
 </div>
 </template>
@@ -81,6 +120,7 @@
 <script>
 import {PRESETS} from '../lib/scripts/driveRings.js';
 import {SIZES} from '../lib/scripts/venueMap.js';
+import {ASPECTS, playPreview, exportVideo} from '../lib/scripts/venueAnimation.js';
 
 export default {
   name: 'VenuePanel',
@@ -104,6 +144,13 @@ export default {
       size: '18x24',
       posterSizes: Object.keys(SIZES).filter(s => s !== 'tee'),
       garment: '#ffffff',
+      aspects: ASPECTS,
+      aspect: 'wide',
+      seconds: 15,
+      titleCard: true,
+      previewOpen: false,
+      exporting: false,
+      exportProgress: 0,
       message: '',
       backgrounds: [
         {name: 'Black', color: '#0b0b0b'},
@@ -122,7 +169,47 @@ export default {
   mounted() {
     this.$emit('background', this.background);
   },
+  beforeUnmount() {
+    this.closePreview();
+  },
   methods: {
+    motionOptions() {
+      return {aspect: this.aspect, seconds: this.seconds, titleCard: this.titleCard};
+    },
+    openPreview() {
+      this.previewOpen = true;
+      this.$nextTick(() => {
+        this.player = playPreview(this.controller.getRenderData(), this.motionOptions(), this.$refs.previewCanvas);
+      });
+    },
+    closePreview() {
+      if (this.player) this.player.stop();
+      this.player = null;
+      this.previewOpen = false;
+    },
+    async exportMP4() {
+      if (this.exporting) return;
+      this.exporting = true;
+      this.exportProgress = 0;
+      this.message = 'Rendering video… keep this tab in front until it finishes.';
+      try {
+        const blob = await exportVideo(this.controller.getRenderData(), this.motionOptions(),
+          p => { this.exportProgress = p; });
+        const slug = (this.title || 'venue').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${slug}-pulse-${this.aspect}-${this.seconds}s.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        this.message = `MP4 downloaded (${(blob.size / 1e6).toFixed(1)} MB).`;
+      } catch (e) {
+        this.message = e.message || String(e);
+      } finally {
+        this.exporting = false;
+      }
+    },
     gradient(colors) {
       return `linear-gradient(90deg, ${colors.join(', ')})`;
     },
@@ -279,6 +366,36 @@ export default {
   .status {
     color: highlight-color;
     padding-top: 6px;
+  }
+}
+
+.venue-panel .check input {
+  width: 18px;
+  height: 18px;
+}
+
+.video-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  .frame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  canvas {
+    max-width: 88vw;
+    max-height: 80vh;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  }
+  .preview-actions {
+    display: flex;
+    gap: 8px;
   }
 }
 

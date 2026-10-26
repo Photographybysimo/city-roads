@@ -135,6 +135,7 @@ export default async function venueMap(options = {}) {
     },
     setText(newText) { Object.assign(text, newText); },
     toSVG: (opts) => posterSVG(opts),
+    getRenderData,
     preview(opts) {
       const url = URL.createObjectURL(new Blob([posterSVG(opts)], {type: 'image/svg+xml'}));
       window.open(url, '_blank');
@@ -153,6 +154,40 @@ export default async function venueMap(options = {}) {
       renderer.renderFrame();
     },
   };
+
+  /**
+   * Everything a renderer needs, camera-independent. Coordinates are in
+   * radius units centered on the venue (y down), distance is 0..1 of the
+   * outermost band. Used by the animation exporter.
+   */
+  function getRenderData() {
+    const n = inCircle.length;
+    const coords = new Float32Array(n * 4);
+    const distance = new Float32Array(n);
+    const band = new Uint8Array(n);
+    inCircle.forEach(([a, b, nodeA, nodeB], i) => {
+      const p1 = project(nodeA);
+      const p2 = project(nodeB);
+      coords[i * 4] = (p1.x - center.x) / projectedRadius;
+      coords[i * 4 + 1] = -(p1.y - center.y) / projectedRadius;
+      coords[i * 4 + 2] = (p2.x - center.x) / projectedRadius;
+      coords[i * 4 + 3] = -(p2.y - center.y) / projectedRadius;
+      distance[i] = Math.min(1.25, (dist.get(a) + dist.get(b)) / 2 / maxDistance);
+      band[i] = bandOf(a, b);
+    });
+    return {
+      count: n,
+      coords,
+      distance,
+      band,
+      colors: bandColors(),
+      palette: palette.slice(),
+      background,
+      lineWidth,
+      text: {...text},
+      coordinates: formatCoords(venue),
+    };
+  }
 
   function bandColors(bg = background) {
     return ensureContrast(interpolatePalette(palette, bands), bg);

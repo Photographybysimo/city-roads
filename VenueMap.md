@@ -41,3 +41,14 @@ Sizes: `8x10`, `11x14`, `12x16`, `16x20`, `18x24`, `24x36`, `tee`.
   before sending SVG to a printer, or send the PNG.
 - Loaded roads are cached in your browser for 30 days. `clearRoadCache()` resets it.
 - Credit "© OpenStreetMap contributors" is printed small at the bottom (ODbL).
+
+## Motion: venue pulse
+
+In the panel, **Motion · venue pulse** animates the roads lighting up outward
+from the venue by driving distance, with a slow push-in and an optional title card.
+
+- Formats: 16:9 (LED walls, screens), 1:1 (LinkedIn), 9:16 (Reels, Stories)
+- Length: 10, 15 or 30 seconds, 30 fps, H.264 MP4
+- **Play preview** loops it in the browser; **Export MP4** renders frame by frame
+  (exact timing, no dropped frames). Keep the tab in front while it renders.
+- Needs Chrome, Edge or Safari (WebCodecs).

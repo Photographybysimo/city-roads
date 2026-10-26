@@ -32,6 +32,8 @@ export const SIZES = {
 
 const UNITS_PER_INCH = 100; // SVG user units
 
+export const SHAPES = ['circle', 'square', 'reach'];
+
 export default async function venueMap(options = {}) {
   const scene = options.scene || window.scene;
   if (!scene) throw new Error('Scene is not ready yet. Wait for the page to finish loading.');
@@ -56,7 +58,7 @@ export default async function venueMap(options = {}) {
   let bands = clampBands(options.bands || 5);
   let palette = resolvePalette(options);
   let background = options.background || '#0b0b0b';
-  let lineWidth = options.lineWidth || 1;
+  let lineWidth = options.lineWidth || 1.5;
   const text = {
     title: options.title !== undefined ? options.title : (placeName || ''),
     subtitle: options.subtitle || '',
@@ -84,12 +86,33 @@ export default async function venueMap(options = {}) {
   if (segments.length === 0) throw new Error('No roads found around this venue. Try a bigger radiusKm.');
   const {startId, dist} = pickStart(grid.nodes, adjacency, venue);
 
-  // 4. Keep the circle only, and size the bands to what's inside it.
-  const inCircle = segments.filter(([a, b, nodeA, nodeB]) =>
-    dist.has(a) && dist.has(b) &&
-    haversine(venue, nodeA) <= radiusMeters && haversine(venue, nodeB) <= radiusMeters);
-  const inside = inCircle.map(([a, b]) => (dist.get(a) + dist.get(b)) / 2).sort((x, y) => x - y);
-  const maxDistance = options.maxDistance || inside[Math.floor((inside.length - 1) * 0.98)] || 1;
+  // 4. Crop to a shape, and size the bands to what's inside it.
+  //    circle: straight-line radius. square: a box. reach: every road you can
+  //    drive to within the radius — an organic shape set by the street network.
+  let shape = SHAPES.includes(options.shape) ? options.shape : 'circle';
+  let inCircle = [];
+  let maxDistance = 1;
+  applyShape();
+
+  function applyShape() {
+    const metersPerLon = 111320 * Math.cos(venue.lat * Math.PI / 180);
+    const keep = {
+      circle: n => haversine(venue, n) <= radiusMeters,
+      square: n => Math.abs(n.lat - venue.lat) * 111320 <= radiusMeters &&
+                   Math.abs(n.lon - venue.lon) * metersPerLon <= radiusMeters,
+    }[shape];
+    inCircle = segments.filter(([a, b, nodeA, nodeB]) => {
+      if (!dist.has(a) || !dist.has(b)) return false;
+      if (shape === 'reach') return dist.get(a) <= radiusMeters && dist.get(b) <= radiusMeters;
+      return keep(nodeA) && keep(nodeB);
+    });
+    if (shape === 'reach') {
+      maxDistance = options.maxDistance || radiusMeters;
+    } else {
+      const inside = inCircle.map(([a, b]) => (dist.get(a) + dist.get(b)) / 2).sort((x, y) => x - y);
+      maxDistance = options.maxDistance || inside[Math.floor((inside.length - 1) * 0.98)] || 1;
+    }
+  }
 
   // 5. Draw on screen.
   scene.clear();
@@ -109,16 +132,25 @@ export default async function venueMap(options = {}) {
     bottom: center.y - projectedRadius * 1.1,
   });
 
-  const summary = {
-    venue,
-    radiusKm: radiusMeters / 1000,
-    segments: inCircle.length,
-    bandWidthKm: +(maxDistance / bands / 1000).toFixed(2),
-  };
   status('Ready');
 
   return {
-    summary,
+    get summary() {
+      return {
+        venue,
+        shape,
+        radiusKm: radiusMeters / 1000,
+        segments: inCircle.length,
+        bandWidthKm: +(maxDistance / bands / 1000).toFixed(2),
+      };
+    },
+    get shape() { return shape; },
+    setShape(next) {
+      if (!SHAPES.includes(next)) throw new Error(`Unknown shape "${next}". Try: ${SHAPES.join(', ')}`);
+      shape = next;
+      applyShape();
+      drawScene();
+    },
     venue,
     displayName,
     get text() { return {...text}; },
@@ -317,7 +349,7 @@ ${credit}
  * the bar for graphics). Stops a dark outer ring vanishing on a black poster,
  * or a pale center vanishing on a white shirt.
  */
-export function ensureContrast(colors, background, minRatio = 3) {
+export function ensureContrast(colors, background, minRatio = 4) {
   const bg = tinycolor(background);
   const darkBg = bg.isDark();
   return colors.map(c => {

@@ -13,6 +13,15 @@
   </section>
 
   <section>
+    <h4>Shape</h4>
+    <div class='chips shapes'>
+      <button v-for='sh in shapes' :key='sh.key' :class='{active: shape === sh.key}'
+        @click='setShape(sh.key)' :title='sh.hint'>{{sh.label}}</button>
+    </div>
+    <p class='note'>{{shapes.find(sh => sh.key === shape).hint}}</p>
+  </section>
+
+  <section>
     <h4>Colors</h4>
     <div class='presets'>
       <button v-for='(colors, name) in presets' :key='name' :class='{active: preset === name}'
@@ -113,7 +122,7 @@
       </div>
     </div>
   </div>
-  <p class='note'>{{controller.summary.segments.toLocaleString()}} road segments · each band ≈ {{controller.summary.bandWidthKm}} km of driving</p>
+  <p class='note'>{{summary.segments.toLocaleString()}} road segments · each band ≈ {{summary.bandWidthKm}} km of driving</p>
 </div>
 </template>
 
@@ -144,6 +153,13 @@ export default {
       size: '18x24',
       posterSizes: Object.keys(SIZES).filter(s => s !== 'tee'),
       garment: '#ffffff',
+      shape: this.controller.shape,
+      summary: this.controller.summary,
+      shapes: [
+        {key: 'circle', label: 'Circle', hint: 'Every road within a straight-line radius.'},
+        {key: 'square', label: 'Square', hint: 'Fills the frame edge to edge.'},
+        {key: 'reach', label: 'Drive reach', hint: 'Only roads you can drive to within the radius. The shape comes from the streets themselves.'},
+      ],
       aspects: ASPECTS,
       aspect: 'wide',
       seconds: 15,
@@ -223,6 +239,12 @@ export default {
     setBands(n) {
       this.bands = n;
       this.controller.setBands(n);
+      this.summary = this.controller.summary;
+    },
+    setShape(key) {
+      this.shape = key;
+      this.controller.setShape(key);
+      this.summary = this.controller.summary;
     },
     setBackground(color) {
       this.background = color;
@@ -307,6 +329,9 @@ export default {
       border-color: highlight-color;
       color: white;
     }
+  }
+  .shapes {
+    justify-content: flex-start;
   }
   .presets {
     display: grid;
